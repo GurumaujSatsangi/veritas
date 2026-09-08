@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
+    "worker": "node src/workers/pdfWorker.js",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push"
   },
@@ -14,9 +15,13 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "bullmq": "^6.3.4",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
+    "ioredis": "^6.0.0",
+    "multer": "^2.3.0",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.23.0"
   },
   "devDependencies": {

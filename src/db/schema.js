@@ -4,6 +4,7 @@ const documents = pgTable('documents', {
   id: serial('id').primaryKey(),
   title: text('title'),
   content: text('content'),
+  status: text('status').default('processing'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
