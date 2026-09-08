@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Superjoin | Fact Extractor & Analyzer</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      --glass-bg: rgba(30, 41, 59, 0.7);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      
+      --badge-green: rgba(34, 197, 94, 0.2);
+      --badge-green-text: #4ade80;
+      --badge-red: rgba(239, 68, 68, 0.2);
+      --badge-red-text: #f87171;
+      --badge-yellow: rgba(234, 179, 8, 0.2);
+      --badge-yellow-text: #facc15;
+      --badge-gray: rgba(100, 116, 139, 0.2);
+      --badge-gray-text: #cbd5e1;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 2rem;
+      overflow-x: hidden;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    h1 {
+      font-weight: 700;
+      font-size: 2.5rem;
+      background: linear-gradient(to right, #818cf8, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .glass-panel {
+      background: var(--glass-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 2rem;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      transition: transform 0.3s ease;
+    }
+
+    .upload-section {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .file-input-wrapper {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+    }
+
+    .file-input-wrapper input[type=file] {
+      font-size: 100px;
+      position: absolute;
+      left: 0;
+      top: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn:hover {
+      background: var(--accent-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    #upload-status {
+      font-size: 0.9rem;
+      color: var(--badge-yellow-text);
+      font-weight: 500;
+      min-height: 20px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    select {
+      background: rgba(15, 23, 42, 0.8);
+      color: var(--text-main);
+      border: 1px solid var(--glass-border);
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      outline: none;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      padding: 1rem;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    th {
+      color: var(--text-muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      letter-spacing: 0.05em;
+    }
+
+    tbody tr {
+      transition: background 0.2s ease;
+    }
+
+    tbody tr:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      display: inline-block;
+    }
+
+    .badge.corroborates { background: var(--badge-green); color: var(--badge-green-text); }
+    .badge.contradicts { background: var(--badge-red); color: var(--badge-red-text); }
+    .badge.reconciled { background: var(--badge-yellow); color: var(--badge-yellow-text); }
+    .badge.unrelated { background: var(--badge-gray); color: var(--badge-gray-text); }
+
+    .fact-attr {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .attr-chip {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .relationship-card {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .relationship-card .facts-compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .fact-box {
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 6px;
+      border-left: 3px solid var(--accent);
+    }
+
+    .fact-box.target {
+      border-left-color: #c084fc;
+    }
+
+    .relationship-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .explanation {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Loading Spinner */
+    .spinner {
+      display: inline-block;
+      width: 1.5rem;
+      height: 1.5rem;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* File name display */
+    #file-name-display {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Superjoin Analyzer</h1>
+    <p class="subtitle">Intelligent PDF Fact Extraction & Contradiction Detection</p>
+  </header>
+
+  <div class="container">
+    
+    <!-- Upload Section -->
+    <div class="glass-panel upload-section">
+      <h2>Upload Document</h2>
+      <p style="color: var(--text-muted); font-size: 0.95rem;">Upload a PDF to extract facts and discover relationships across your knowledge base.</p>
+      
+      <form id="uploadForm">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <div class="file-input-wrapper">
+            <button type="button" class="btn" style="background: rgba(255,255,255,0.1); color: var(--text-main);">
+              Choose PDF
+            </button>
+            <input type="file" id="pdfFile" name="file" accept="application/pdf" required onchange="document.getElementById('file-name-display').textContent = this.files[0] ? this.files[0].name : ''">
+          </div>
+          <button type="submit" class="btn" id="uploadBtn">Analyze Document</button>
+        </div>
+        <div id="file-name-display"></div>
+      </form>
+      
+      <div id="upload-status" class="hidden">
+        <span class="spinner" style="width: 1rem; height: 1rem; border-width: 2px; margin-right: 0.5rem; vertical-align: middle;"></span>
+        <span id="status-text">Uploading...</span>
+      </div>
+    </div>
+
+    <!-- Global Relationships (Always visible, filtered) -->
+    <div class="glass-panel">
+      <div class="section-header">
+        <h2>Global Knowledge Graph</h2>
+        <select id="globalFilter" onchange="loadGlobalRelationships()">
+          <option value="">All Relationships</option>
+          <option value="contradicts" selected>Contradictions Only</option>
+          <option value="reconciled">Reconciled Only</option>
+          <option value="corroborates">Corroborations Only</option>
+        </select>
+      </div>
+      <div id="globalRelationshipsList">
+        <p style="color: var(--text-muted); text-align: center; padding: 2rem;">Loading global relationships...</p>
+      </div>
+    </div>
+
+    <!-- Current Document Facts -->
+    <div id="document-results" class="hidden">
+      <div class="glass-panel">
+        <div class="section-header">
+          <h2>Extracted Facts <span id="current-doc-title" style="font-size: 1rem; color: var(--text-muted); font-weight: normal; margin-left: 1rem;"></span></h2>
+        </div>
+        <div style="overflow-x: auto;">
+          <table id="factsTable">
+            <thead>
+              <tr>
+                <th>Fact</th>
+                <th>Attributes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Facts will be injected here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const uploadForm = document.getElementById('uploadForm');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const statusDiv = document.getElementById('upload-status');
+    const statusText = document.getElementById('status-text');
+    const documentResults = document.getElementById('document-results');
+    
+    // Initial Load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadGlobalRelationships();
+    });
+
+    uploadForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const fileInput = document.getElementById('pdfFile');
+      if (!fileInput.files[0]) return;
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      uploadBtn.disabled = true;
+      statusDiv.classList.remove('hidden');
+      statusText.textContent = 'Uploading document...';
+      documentResults.classList.add('hidden');
+
+      try {
+        const response = await fetch('/documents/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error || 'Upload failed');
+
+        pollDocumentStatus(data.documentId);
+        
+      } catch (err) {
+        statusText.textContent = `Error: ${err.message}`;
+        uploadBtn.disabled = false;
+        statusText.style.color = 'var(--badge-red-text)';
+      }
+    });
+
+    async function pollDocumentStatus(documentId) {
+      statusText.textContent = 'Processing PDF & extracting facts (this may take a minute)...';
+      statusText.style.color = 'var(--badge-yellow-text)';
+
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/documents/${documentId}`);
+          const doc = await res.json();
+
+          if (doc.status === 'done') {
+            clearInterval(interval);
+            statusText.textContent = 'Processing complete!';
+            statusText.style.color = 'var(--badge-green-text)';
+            uploadBtn.disabled = false;
+            
+            document.getElementById('current-doc-title').textContent = `(${doc.title})`;
+            loadDocumentFacts(documentId);
+            loadGlobalRelationships(); // Refresh global graph
+            
+            setTimeout(() => { statusDiv.classList.add('hidden'); }, 3000);
+          } else if (doc.status === 'failed') {
+            clearInterval(interval);
+            statusText.textContent = 'Processing failed on the server.';
+            statusText.style.color = 'var(--badge-red-text)';
+            uploadBtn.disabled = false;
+          }
+        } catch (err) {
+          console.error("Polling error:", err);
+        }
+      }, 2000);
+    }
+
+    async function loadDocumentFacts(documentId) {
+      try {
+        const res = await fetch(`/documents/${documentId}/facts`);
+        const facts = await res.json();
+
+        const tbody = document.querySelector('#factsTable tbody');
+        tbody.innerHTML = '';
+
+        if (facts.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; color: var(--text-muted);">No facts extracted.</td></tr>`;
+        } else {
+          facts.forEach(f => {
+            const parsed = JSON.parse(f.content);
+            
+            let attributesHtml = '';
+            if (parsed.subject) attributesHtml += `<span class="attr-chip">Subject: ${parsed.subject}</span>`;
+            if (parsed.value !== undefined && parsed.value !== null) attributesHtml += `<span class="attr-chip">Value: ${parsed.value}</span>`;
+            if (parsed.unit) attributesHtml += `<span class="attr-chip">Unit: ${parsed.unit}</span>`;
+            if (parsed.time_scope) attributesHtml += `<span class="attr-chip">Time: ${parsed.time_scope}</span>`;
+
+            tbody.innerHTML += `
+              <tr>
+                <td style="font-weight: 500;">${parsed.text}</td>
+                <td><div class="fact-attr">${attributesHtml}</div></td>
+              </tr>
+            `;
+          });
+        }
+
+        documentResults.classList.remove('hidden');
+      } catch (err) {
+        console.error("Error loading facts:", err);
+      }
+    }
+
+    async function loadGlobalRelationships() {
+      const type = document.getElementById('globalFilter').value;
+      const container = document.getElementById('globalRelationshipsList');
+      
+      container.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 2rem;"><span class="spinner" style="vertical-align: middle; margin-right: 10px;"></span> Loading relationships...</p>`;
+      
+      try {
+        const url = type ? `/relationships?type=${type}` : '/relationships';
+        const res = await fetch(url);
+        const rels = await res.json();
+
+        if (rels.length === 0) {
+          container.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 2rem;">No relationships found for this filter.</p>`;
+          return;
+        }
+
+        let html = '';
+        rels.forEach(rel => {
+          const sourceFact = JSON.parse(rel.sourceFactContent);
+          const targetFact = JSON.parse(rel.targetFactContent);
+          
+          html += `
+            <div class="relationship-card">
+              <div class="facts-compare">
+                <div class="fact-box">
+                  <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem; text-transform: uppercase;">Doc: ${rel.sourceDocumentTitle}</div>
+                  <div style="font-weight: 500;">${sourceFact.text}</div>
+                </div>
+                <div class="fact-box target">
+                  <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem; text-transform: uppercase;">Doc: ${rel.targetDocumentTitle}</div>
+                  <div style="font-weight: 500;">${targetFact.text}</div>
+                </div>
+              </div>
+              <div class="relationship-meta">
+                <span class="badge ${rel.type}">${rel.type}</span>
+                <span class="explanation">Cross-referenced by vector similarity analysis.</span>
+              </div>
+            </div>
+          `;
+        });
+        
+        container.innerHTML = html;
+      } catch (err) {
+        container.innerHTML = `<p style="color: var(--badge-red-text); text-align: center; padding: 2rem;">Failed to load relationships: ${err.message}</p>`;
+      }
+    }
+  </script>
+</body>
+</html>

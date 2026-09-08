@@ -1,5 +1,6 @@
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const express = require('express');
+const path = require('path');
 const multer = require('multer');
 const { Queue } = require('bullmq');
 const Redis = require('ioredis');
@@ -29,6 +30,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
