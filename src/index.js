@@ -5,7 +5,7 @@ const os = require('os');
 const multer = require('multer');
 const { Queue } = require('bullmq');
 const Redis = require('ioredis');
-const { eq, or } = require('drizzle-orm');
+const { eq, or, and, sql } = require('drizzle-orm');
 const { alias } = require('drizzle-orm/pg-core');
 const { db } = require('./db/client');
 const { documents, facts, relationships } = require('./db/schema');
@@ -179,6 +179,57 @@ function shapeRelationshipRow(r) {
   };
 }
 
+function escapeHtml(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function relationshipsPage(heading, rels) {
+  const cards = rels.length ? rels.map(r => {
+    const a = JSON.parse(r.sourceFactContent || '{}');
+    const b = JSON.parse(r.targetFactContent || '{}');
+    return `<div class="rel">
+      <div class="pair">
+        <div class="side"><div class="doc">${escapeHtml(r.sourceDocumentTitle)}</div><div>${escapeHtml(a.text || '')}</div></div>
+        <div class="side"><div class="doc">${escapeHtml(r.targetDocumentTitle)}</div><div>${escapeHtml(b.text || '')}</div></div>
+      </div>
+      <div class="foot"><span class="badge ${escapeHtml(r.type)}">${escapeHtml(r.type)}</span>
+      <span class="explain">${escapeHtml(r.explanation || '')}</span></div>
+    </div>`;
+  }).join('') : '<p class="muted">No relationships.</p>';
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(heading)}</title>
+<style>
+  :root{--bg:#fafafa;--card:#fff;--text:#1a1a1a;--muted:#6b7280;--border:#e5e7eb;
+    --green-bg:#e7f6ec;--green-fg:#1a7f42;--red-bg:#fdeaea;--red-fg:#b42318;
+    --amber-bg:#fdf4e3;--amber-fg:#92600b;--gray-bg:#eef0f2;--gray-fg:#4b5563;}
+  @media (prefers-color-scheme:dark){:root{--bg:#14161a;--card:#1c1f24;--text:#e8eaed;--muted:#9aa0a6;--border:#2c2f36;
+    --green-bg:#12331f;--green-fg:#6ee7a0;--red-bg:#3a1b1b;--red-fg:#f5a9a0;--amber-bg:#3a2f14;--amber-fg:#f0c674;--gray-bg:#2a2d33;--gray-fg:#b8bcc2;}}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:40px 20px 80px}
+  a{color:inherit}
+  h1{font-size:20px;margin:0 0 4px}
+  .muted{color:var(--muted)}
+  .rel{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:560px){.pair{grid-template-columns:1fr}}
+  .doc{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:3px}
+  .foot{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .explain{font-size:13px;color:var(--muted)}
+  .badge{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;padding:2px 8px;border-radius:999px}
+  .badge.corroborates{background:var(--green-bg);color:var(--green-fg)}
+  .badge.contradicts{background:var(--red-bg);color:var(--red-fg)}
+  .badge.reconciled{background:var(--amber-bg);color:var(--amber-fg)}
+  .badge.unrelated{background:var(--gray-bg);color:var(--gray-fg)}
+</style></head><body><div class="wrap">
+<p class="muted"><a href="/">&larr; Home</a></p>
+<h1>${escapeHtml(heading)}</h1>
+<p class="muted">${rels.length} relationship${rels.length === 1 ? '' : 's'}</p>
+${cards}
+</div></body></html>`;
+}
+
 app.get('/documents/:id/relationships', async (req, res) => {
   try {
     const documentId = req.params.id;
@@ -187,7 +238,15 @@ app.get('/documents/:id/relationships', async (req, res) => {
       eq(sourceFact.documentId, documentId),
       eq(targetFact.documentId, documentId)
     ));
-    res.json(rows.map(shapeRelationshipRow));
+    const rels = rows.map(shapeRelationshipRow);
+
+    if (req.query.format === 'json') return res.json(rels);
+
+    const [doc] = await db.select().from(documents).where(eq(documents.id, documentId));
+    res.send(relationshipsPage(
+      doc ? `Relationships for ${doc.title}` : 'Relationships',
+      rels
+    ));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -195,9 +254,13 @@ app.get('/documents/:id/relationships', async (req, res) => {
 
 app.get('/relationships', async (req, res) => {
   try {
-    const type = req.query.type;
-    const { query } = selectRelationshipRows();
-    const rows = type ? await query.where(eq(relationships.type, type)) : await query;
+    const { type, scope } = req.query;
+    const { query, sourceFact, targetFact } = selectRelationshipRows();
+    const conds = [];
+    if (type) conds.push(eq(relationships.type, type));
+    if (scope === 'cross') conds.push(sql`${sourceFact.documentId} <> ${targetFact.documentId}`);
+    if (scope === 'same') conds.push(sql`${sourceFact.documentId} = ${targetFact.documentId}`);
+    const rows = conds.length ? await query.where(and(...conds)) : await query;
     res.json(rows.map(shapeRelationshipRow));
   } catch (error) {
     res.status(500).json({ error: error.message });

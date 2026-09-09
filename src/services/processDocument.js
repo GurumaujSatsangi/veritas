@@ -118,7 +118,7 @@ async function processDocument(documentId, filePath, onProgress = () => {}) {
     // 3c. Make every fact searchable before relationship detection.
     console.log(`[processDocument] Upserting ${allFacts.length} vectors...`);
     report(42, 'Indexing vectors');
-    await upsertFactVectors(allFacts.map(f => ({ id: f.id, vector: f.vector })));
+    await upsertFactVectors(allFacts.map(f => ({ id: f.id, vector: f.vector, documentId })));
 
     const factById = new Map(allFacts.map(f => [f.id, f]));
 
@@ -128,7 +128,19 @@ async function processDocument(documentId, filePath, onProgress = () => {}) {
     const relRows = [];
     await mapLimit(allFacts, FACT_CONCURRENCY, async (newFact) => {
       try {
-        const candidates = await searchSimilarFacts(newFact.vector, TOP_K, newFact.id);
+        // Nearest facts overall, plus nearest facts from OTHER documents so
+        // cross-document pairs are always evaluated (same-document facts
+        // otherwise crowd out the top-K).
+        const [near, crossDoc] = await Promise.all([
+          searchSimilarFacts(newFact.vector, TOP_K, { excludeId: newFact.id }),
+          searchSimilarFacts(newFact.vector, TOP_K, { excludeId: newFact.id, sameDocumentId: documentId }),
+        ]);
+        const seen = new Set();
+        const candidates = [...near, ...crossDoc].filter(c => {
+          if (seen.has(c.id)) return false;
+          seen.add(c.id);
+          return true;
+        });
         const judged = await Promise.all(candidates.map(async (c) => {
           const other = factById.get(c.id);
           if (!other || other.id === newFact.id) return null;

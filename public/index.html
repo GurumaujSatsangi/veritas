@@ -152,12 +152,19 @@
     <div class="card">
       <div class="row" style="justify-content:space-between">
         <h2 style="margin:0">Relationships</h2>
-        <select id="filter">
-          <option value="">All types</option>
-          <option value="contradicts">Contradicts</option>
-          <option value="reconciled">Reconciled</option>
-          <option value="corroborates">Corroborates</option>
-        </select>
+        <div class="row">
+          <select id="scope">
+            <option value="">All documents</option>
+            <option value="cross">Between two documents</option>
+            <option value="same">Within one document</option>
+          </select>
+          <select id="filter">
+            <option value="">All types</option>
+            <option value="contradicts">Contradicts</option>
+            <option value="reconciled">Reconciled</option>
+            <option value="corroborates">Corroborates</option>
+          </select>
+        </div>
       </div>
       <div id="rels" class="note" style="margin-top:14px">Loading…</div>
     </div>
@@ -302,13 +309,20 @@
 
     async function loadRelationships() {
       var type = document.getElementById('filter').value;
+      var scope = document.getElementById('scope').value;
       var box = document.getElementById('rels');
       box.textContent = 'Loading…';
       try {
-        var res = await fetch('/relationships' + (type ? '?type=' + type : ''));
+        var qs = [];
+        if (type) qs.push('type=' + type);
+        if (scope) qs.push('scope=' + scope);
+        var res = await fetch('/relationships' + (qs.length ? '?' + qs.join('&') : ''));
         var rels = await res.json();
         if (!Array.isArray(rels) || !rels.length) {
-          box.textContent = 'No relationships yet.';
+          box.classList.add('note');
+          box.textContent = scope === 'cross'
+            ? 'No cross-document relationships yet. Run "npm run reanalyze" after uploading a second document.'
+            : 'No relationships yet.';
           return;
         }
         box.classList.remove('note');
@@ -340,6 +354,7 @@
     }
 
     document.getElementById('filter').addEventListener('change', loadRelationships);
+    document.getElementById('scope').addEventListener('change', loadRelationships);
     loadRelationships();
   </script>
 </body>
