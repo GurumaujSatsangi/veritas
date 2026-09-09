@@ -35,6 +35,7 @@ const port = process.env.PORT || 3000;
 function factContentString(fact) {
   return JSON.stringify({
     text: fact.text,
+    page: fact.page,
     span_start: fact.spanStart,
     span_end: fact.spanEnd,
     ...(fact.attributes || {}),
@@ -131,10 +132,12 @@ function selectRelationshipRows() {
     sourceFactId: relationships.sourceFactId,
     targetFactId: relationships.targetFactId,
     sourceFactText: sourceFact.text,
+    sourceFactPage: sourceFact.page,
     sourceFactSpanStart: sourceFact.spanStart,
     sourceFactSpanEnd: sourceFact.spanEnd,
     sourceFactAttributes: sourceFact.attributes,
     targetFactText: targetFact.text,
+    targetFactPage: targetFact.page,
     targetFactSpanStart: targetFact.spanStart,
     targetFactSpanEnd: targetFact.spanEnd,
     targetFactAttributes: targetFact.attributes,
@@ -162,12 +165,14 @@ function shapeRelationshipRow(r) {
     targetFactId: r.targetFactId,
     sourceFactContent: factContentString({
       text: r.sourceFactText,
+      page: r.sourceFactPage,
       spanStart: r.sourceFactSpanStart,
       spanEnd: r.sourceFactSpanEnd,
       attributes: r.sourceFactAttributes,
     }),
     targetFactContent: factContentString({
       text: r.targetFactText,
+      page: r.targetFactPage,
       spanStart: r.targetFactSpanStart,
       spanEnd: r.targetFactSpanEnd,
       attributes: r.targetFactAttributes,
@@ -188,10 +193,11 @@ function relationshipsPage(heading, rels) {
   const cards = rels.length ? rels.map(r => {
     const a = JSON.parse(r.sourceFactContent || '{}');
     const b = JSON.parse(r.targetFactContent || '{}');
+    const docLabel = (title, pg) => escapeHtml(title) + (pg ? ` &middot; p. ${escapeHtml(pg)}` : '');
     return `<div class="rel">
       <div class="pair">
-        <div class="side"><div class="doc">${escapeHtml(r.sourceDocumentTitle)}</div><div>${escapeHtml(a.text || '')}</div></div>
-        <div class="side"><div class="doc">${escapeHtml(r.targetDocumentTitle)}</div><div>${escapeHtml(b.text || '')}</div></div>
+        <div class="side"><div class="doc">${docLabel(r.sourceDocumentTitle, a.page)}</div><div>${escapeHtml(a.text || '')}</div></div>
+        <div class="side"><div class="doc">${docLabel(r.targetDocumentTitle, b.page)}</div><div>${escapeHtml(b.text || '')}</div></div>
       </div>
       <div class="foot"><span class="badge ${escapeHtml(r.type)}">${escapeHtml(r.type)}</span>
       <span class="explain">${escapeHtml(r.explanation || '')}</span></div>

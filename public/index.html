@@ -91,6 +91,9 @@
 
     .note { font-size: 13px; color: var(--muted); margin-top: 10px; }
     .error { color: var(--red-fg); }
+    .howto { margin: 14px 0 0; padding-left: 20px; font-size: 13px; color: var(--muted); }
+    .howto li { margin: 4px 0; }
+    .howto code { background: var(--track); border-radius: 4px; padding: 1px 5px; font-size: 12px; }
 
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
     th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding: 8px 10px; border-bottom: 1px solid var(--border); }
@@ -129,6 +132,12 @@
         <input type="file" id="file" name="file" accept="application/pdf" required>
         <button type="submit" id="submit">Analyze</button>
       </form>
+      <ol class="howto">
+        <li>Upload <strong>one PDF at a time</strong> and wait for it to finish before starting the next.</li>
+        <li>Upload documents you want compared &mdash; e.g. reports on the same company or topic. Unrelated PDFs won't produce relationships.</li>
+        <li><strong>Order matters.</strong> Each new document is cross-checked only against documents already uploaded. Upload the older / reference document first, then the newer one.</li>
+        <li>To cross-check documents that were uploaded <em>before</em> each other, run <code>npm&nbsp;run&nbsp;reanalyze</code> once, then use the &ldquo;Between two documents&rdquo; filter below.</li>
+      </ol>
       <div id="progress" class="progress" hidden>
         <div class="bar-track"><div class="bar-fill" id="fill"></div></div>
         <div class="meta">
@@ -143,7 +152,7 @@
       <h2 id="factsTitle">Extracted facts</h2>
       <div style="overflow-x:auto">
         <table>
-          <thead><tr><th>Fact</th><th>Details</th></tr></thead>
+          <thead><tr><th style="width:52px">Page</th><th>Fact</th><th>Details</th></tr></thead>
           <tbody id="factsBody"></tbody>
         </table>
       </div>
@@ -284,18 +293,22 @@
         document.getElementById('factsTitle').textContent = 'Extracted facts (' + facts.length + ')';
 
         if (!facts.length) {
-          body.innerHTML = '<tr><td colspan="2" style="color:var(--muted)">No facts extracted.</td></tr>';
+          body.innerHTML = '<tr><td colspan="3" style="color:var(--muted)">No facts extracted.</td></tr>';
         } else {
           facts.forEach(function (f) {
             var d = {};
             try { d = JSON.parse(f.content) || {}; } catch (_) {}
+            var pg = (f.page != null ? f.page : d.page);
             var chips = '';
             if (d.subject) chips += chip('Subject', d.subject);
             if (d.value !== undefined && d.value !== null) chips += chip('Value', d.value);
             if (d.unit) chips += chip('Unit', d.unit);
             if (d.time_scope) chips += chip('Time', d.time_scope);
             var tr = document.createElement('tr');
-            tr.innerHTML = '<td>' + esc(d.text || '') + '</td><td><div class="chips">' + chips + '</div></td>';
+            tr.innerHTML =
+              '<td style="color:var(--muted)">' + (pg != null ? esc(pg) : '&ndash;') + '</td>' +
+              '<td>' + esc(d.text || '') + '</td>' +
+              '<td><div class="chips">' + chips + '</div></td>';
             body.appendChild(tr);
           });
         }
@@ -332,8 +345,8 @@
           return '' +
             '<div class="rel">' +
               '<div class="pair">' +
-                '<div class="side"><div class="doc">' + esc(rel.sourceDocumentTitle) + '</div><div class="txt">' + esc(a.text || '') + '</div></div>' +
-                '<div class="side"><div class="doc">' + esc(rel.targetDocumentTitle) + '</div><div class="txt">' + esc(b.text || '') + '</div></div>' +
+                '<div class="side"><div class="doc">' + docLabel(rel.sourceDocumentTitle, a.page) + '</div><div class="txt">' + esc(a.text || '') + '</div></div>' +
+                '<div class="side"><div class="doc">' + docLabel(rel.targetDocumentTitle, b.page) + '</div><div class="txt">' + esc(b.text || '') + '</div></div>' +
               '</div>' +
               '<div class="foot">' +
                 '<span class="badge ' + esc(rel.type) + '">' + esc(rel.type) + '</span>' +
@@ -347,6 +360,9 @@
     }
 
     function safeParse(s) { try { return JSON.parse(s) || {}; } catch (_) { return {}; } }
+    function docLabel(title, page) {
+      return esc(title) + (page != null ? ' · p. ' + esc(page) : '');
+    }
     function esc(v) {
       return String(v == null ? '' : v)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
