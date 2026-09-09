@@ -1,47 +1,135 @@
-# Superjoin Fact Extractor & Analyzer
+# Superjoin — Fact Extractor & Cross-Document Analyzer
 
-Superjoin is an intelligent document processing pipeline that extracts factual claims from PDFs, generates vector embeddings, and cross-references facts across documents to discover relationships (Corroborates, Contradicts, Reconciled, Unrelated).
+Upload PDFs. Superjoin pulls out the factual claims, then compares every claim
+against the claims in your **other** documents and labels how they relate:
 
-## Architecture
+| Label | Meaning |
+|---|---|
+| `corroborates` | Both claims say the same thing |
+| `contradicts` | The claims genuinely conflict |
+| `reconciled` | They look like a conflict, but a difference in time period / unit / scope explains it |
+| `unrelated` | Different topics — not stored |
 
-1. **Upload**: PDFs are uploaded to an Express API and stored temporarily.
-2. **Background Processing**: A BullMQ worker picks up the job.
-3. **Extraction**: Text is extracted using `pdf-parse`.
-4. **Fact Identification**: `gpt-4o-mini` extracts structured JSON facts (text, subject, value, unit, time_scope).
-5. **Vector Search**: Facts are embedded using `all-MiniLM-L6-v2` and searched against a Qdrant vector database.
-6. **Relationship Judging**: `gpt-4o` evaluates candidate pairs to classify their logical relationship.
-7. **Persistence**: Facts and Relationships are stored in a Postgres database via Drizzle ORM.
-8. **Visualization**: A responsive, glassmorphism-styled UI allows users to view the global knowledge graph and filter contradictions.
+---
 
-## Sample Relationships
+## Tech stack
 
-Here are examples of relationships discovered by the pipeline (based on the provided sample documents):
+- **Node.js + Express** — HTTP API and static frontend
+- **BullMQ + Redis** — background job queue (PDF processing runs off the request)
+- **Postgres (Neon) + Drizzle ORM** — stores documents, facts, relationships
+- **Qdrant** — vector database for similarity search
+- **OpenAI `gpt-4o-mini`** — extracts facts and classifies relationships
+- **`@xenova/transformers` (`all-MiniLM-L6-v2`)** — 384-dim sentence embeddings, run locally
+- **`pdf-parse`** — PDF text extraction
+- Plain HTML/CSS/JS frontend (no framework)
 
-### 1. Corroborates (Clear Evidence)
-* **Fact A** (Delhivery Prospectus 2022): "Delhivery is India's largest fully integrated logistics services player by revenue."
-* **Fact B** (Delhivery Annual Report FY24): "We have maintained our position as the leading logistics provider in the country."
-* **Relationship**: Corroborates
-* **Explanation**: Both facts support the claim that Delhivery holds the leading market position in Indian logistics.
+---
 
-### 2. Contradicts (Direct Opposition)
-* **Fact A** (Delhivery Prospectus 2022): "The company operates 20 automated sortation centers."
-* **Fact B** (Delhivery Q4 FY24 Earnings): "We currently operate 24 automated sortation centers."
-* **Relationship**: Contradicts
-* **Explanation**: The number of sortation centers directly conflicts (20 vs 24). *(Note: A naive judge flags this as a contradiction if it misses the temporal context).*
+## How it works
 
-### 3. Reconciled (Contextual Resolution)
-* **Fact A** (India Economic Survey 2024-25): "Retail inflation averaged 5.4%."
-* **Fact B** (RBI Annual Report 2024-25): "CPI inflation was recorded at 4.8% by Q4."
-* **Relationship**: Reconciled
-* **Explanation**: The difference is reconciled by the time scope; the Economic Survey provides an annual average, while the RBI report specifies the Q4 end-of-period rate.
+```
+upload PDF ──▶ API saves a `documents` row + queues a job ──▶ returns immediately
+                                   │
+                          BullMQ worker picks it up
+                                   │
+   1. pdf-parse          → text, page by page
+   2. gpt-4o-mini        → structured facts per page {text, subject, value, unit, time_scope, page}
+   3. all-MiniLM-L6-v2   → embed every fact (batched, local)
+   4. Postgres           → bulk-insert facts
+   5. Qdrant             → bulk-upsert vectors, tagged with the document id
+   6. for each fact:     → nearest facts overall + nearest facts in OTHER documents
+   7. gpt-4o-mini        → judge each candidate pair (corroborates / contradicts / reconciled / unrelated)
+   8. Postgres           → bulk-insert the non-unrelated pairs
+```
 
-### 4. Failure Example & Known Limitations
-* **Fact A**: "Logistics costs are 14% of GDP."
-* **Fact B**: "Logistics costs have reduced to 8% of GDP."
-* **Failure Type**: Misjudged as "Contradicts"
-* **Explanation**: The model extracted the facts but failed to extract the geographical scope (e.g., India vs. Global average) from the surrounding text. The relationship judge then incorrectly flagged it as a contradiction. 
+Progress (`{pct, stage}`) is reported to the job the whole way through, so the UI
+shows a live progress bar and ETA.
 
-### Current System Limitations
-1. **Context Loss During Extraction**: The fact extractor (gpt-4o-mini) sometimes isolates a fact but loses the broader paragraph context (e.g., "According to competitor X, our revenue is Y").
-2. **Network Resilience**: The pipeline heavily relies on external cloud services (Redis Cloud for BullMQ, Qdrant Cloud for vectors). During testing, network drops resulted in `ENOTFOUND` and `ETIMEDOUT` errors to Redis Cloud, which can crash the worker and leave documents stuck in a 'processing' state. A production deployment should implement robust retry logic or use a local Redis instance.
-3. **Database Schema Syncing**: Manual schema updates were required because Drizzle ORM `push` fails in non-TTY environments when columns are renamed (e.g., migrating `filename` to `title`).
+**Cross-document matching is incremental.** A document is only compared against
+documents that were already uploaded when it ran. Upload the reference document
+first, then newer ones — or run `npm run reanalyze` once to backfill
+cross-document relationships across the whole corpus.
+
+---
+
+## Setup
+
+```bash
+npm install
+```
+
+Create `.env`:
+
+```
+OPENAI_API_KEY=sk-...
+DATABASE_URL=postgresql://user:pass@host/db?sslmode=require   # Neon
+QDRANT_URL=https://xxxx.cloud.qdrant.io
+QDRANT_API_KEY=...
+REDIS_URL=redis://default:pass@host:port
+PORT=3000
+```
+
+Redis must have `maxmemory-policy noeviction` (BullMQ requirement).
+
+The Postgres schema lives in [`src/db/schema.js`](src/db/schema.js); `npm run db:push`
+syncs it to the database.
+
+Optional tuning env vars: `JUDGE_MODEL` (default `gpt-4o-mini`), `MAX_FACTS`
+(default `600`, `0` = no cap), `TOP_K` (default `3`), `FACT_CONCURRENCY` (default
+`8`), `PAGE_CONCURRENCY` (default `6`), `EMBED_BATCH_SIZE` (default `64`).
+
+---
+
+## Running
+
+Two processes, two terminals:
+
+```bash
+npm run dev      # API + frontend on http://localhost:3000
+npm run worker   # background PDF processor
+```
+
+Open `http://localhost:3000`, upload a PDF, watch the progress bar. Upload a
+second related PDF to get cross-document relationships.
+
+```bash
+npm run reanalyze   # backfill cross-document relationships for docs already uploaded
+node scripts/upload.js   # batch-upload the PDFs in samples/ and poll until done
+```
+
+---
+
+## API
+
+| Method | Route | Purpose |
+|---|---|---|
+| `POST` | `/documents/upload` | Upload a PDF → `{ documentId, jobId }` |
+| `GET` | `/jobs/:id` | Job state + `{ pct, stage }` progress |
+| `GET` | `/documents/:id` | Document row (incl. `status`) |
+| `GET` | `/documents/:id/facts` | Facts extracted from a document |
+| `GET` | `/documents/:id/relationships` | HTML page of that document's relationships (`?format=json` for JSON) |
+| `GET` | `/relationships` | All relationships. `?type=contradicts` `?scope=cross\|same` |
+| `GET` | `/health` | `{ status: "ok" }` |
+
+---
+
+## Database
+
+| Table | Key columns |
+|---|---|
+| `documents` | `id`, `title`, `content`, `status`, `created_at` |
+| `facts` | `id`, `document_id`, `text`, `page`, `span_start`, `span_end`, `attributes` (jsonb) |
+| `relationships` | `id`, `source_fact_id`, `target_fact_id`, `type`, `explanation`, `confidence` |
+
+---
+
+## Known limitations
+
+- **Context loss on extraction** — a fact is sometimes pulled without its
+  surrounding qualifier (e.g. "*global* logistics cost is 14% of GDP" → "logistics
+  cost is 14% of GDP"), which can make the judge see a false contradiction.
+- **Incremental matching** — see above; `npm run reanalyze` is the workaround.
+- **Fact cap** — `MAX_FACTS` (default 600) limits LLM calls on very large PDFs;
+  raise or disable it if you need every fact.
+- **Cloud dependencies** — Redis, Qdrant, Postgres, and OpenAI are all remote; a
+  network blip during a run marks the document `failed` (re-upload to retry).
