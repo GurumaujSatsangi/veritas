@@ -61,9 +61,10 @@ async function extractFacts(pageText, pageNumber) {
     const toolCall = response.choices[0].message.tool_calls?.[0];
     if (toolCall && toolCall.function.name === 'extract_facts') {
       const args = JSON.parse(toolCall.function.arguments);
-      return args.facts || [];
+      // The model occasionally emits malformed entries - keep only usable facts.
+      return (args.facts || []).filter(f => f && typeof f.text === 'string' && f.text.trim());
     }
-    
+
     return [];
   } catch (error) {
     console.error(`Error extracting facts for page ${pageNumber}:`, error);

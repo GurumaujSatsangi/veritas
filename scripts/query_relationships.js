@@ -12,8 +12,8 @@ async function run() {
   const docsList = await db.select().from(documents);
   
   const factMap = new Map();
-  factsList.forEach(f => factMap.set(f.id, JSON.parse(f.content)));
-  
+  factsList.forEach(f => factMap.set(f.id, { text: f.text, ...(f.attributes || {}) }));
+
   const docMap = new Map();
   docsList.forEach(d => docMap.set(d.id, d.title));
 

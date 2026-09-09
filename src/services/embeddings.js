@@ -16,4 +16,20 @@ async function embedText(text) {
   return Array.from(output.data);
 }
 
-module.exports = { embedText };
+// Embed many texts, batched in chunks. Returns an array of number[] vectors
+// aligned with the input order. Non-string / empty entries are embedded as a
+// single space so the output stays index-aligned with the input.
+async function embedTexts(texts, batchSize = Number(process.env.EMBED_BATCH_SIZE) || 64) {
+  if (!texts.length) return [];
+  const extractor = await getPipeline();
+  const safe = texts.map(t => (typeof t === 'string' && t.trim() ? t : ' '));
+  const vectors = [];
+  for (let i = 0; i < safe.length; i += batchSize) {
+    const batch = safe.slice(i, i + batchSize);
+    const output = await extractor(batch, { pooling: 'mean', normalize: true });
+    vectors.push(...output.tolist());
+  }
+  return vectors;
+}
+
+module.exports = { embedText, embedTexts };

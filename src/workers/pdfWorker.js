@@ -10,7 +10,9 @@ const connection = new Redis(process.env.REDIS_URL, {
 const worker = new Worker('pdf-processing', async job => {
   const { documentId, filePath } = job.data;
   console.log(`Processing job ${job.id} for document ${documentId}`);
-  await processDocument(documentId, filePath);
+  await processDocument(documentId, filePath, async (progress) => {
+    try { await job.updateProgress(progress); } catch (_) {}
+  });
 }, { connection });
 
 worker.on('completed', job => {

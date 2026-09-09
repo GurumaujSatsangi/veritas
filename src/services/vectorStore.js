@@ -36,6 +36,14 @@ async function upsertFactVector(factId, vector) {
   });
 }
 
+// Bulk upsert, chunked to keep request bodies reasonable.
+async function upsertFactVectors(points, chunkSize = 256) {
+  for (let i = 0; i < points.length; i += chunkSize) {
+    const chunk = points.slice(i, i + chunkSize).map(p => ({ id: p.id, vector: p.vector }));
+    await client.upsert(COLLECTION_NAME, { wait: true, points: chunk });
+  }
+}
+
 async function searchSimilarFacts(vector, topK, excludeId) {
   let filter;
   if (excludeId !== undefined) {
@@ -48,14 +56,15 @@ async function searchSimilarFacts(vector, topK, excludeId) {
     };
   }
 
-  const results = await client.search(COLLECTION_NAME, {
-    vector: vector,
+  // @qdrant/js-client-rest v1.19 removed `search` in favour of `query`.
+  const results = await client.query(COLLECTION_NAME, {
+    query: vector,
     limit: topK,
     filter: filter,
-    with_payload: false, // Don't need payload for now, just id and score
+    with_payload: false, // just need id and score
   });
-  
-  return results.map(r => ({
+
+  return (results.points || []).map(r => ({
     id: r.id,
     score: r.score,
   }));
@@ -64,5 +73,6 @@ async function searchSimilarFacts(vector, topK, excludeId) {
 module.exports = {
   ensureCollection,
   upsertFactVector,
+  upsertFactVectors,
   searchSimilarFacts,
 };

@@ -62,7 +62,7 @@ Time Scope: ${factB.time_scope || 'N/A'}
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: process.env.JUDGE_MODEL || "gpt-4o-mini",
       messages: [
         { role: "system", content: "You are an expert logical relationship analyzer." },
         { role: "user", content: prompt }
