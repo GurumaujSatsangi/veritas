@@ -1,5 +1,7 @@
 # Veritas — Fact Extractor & Cross-Document Analyzer
 
+Link to Video: https://www.gurumaujsatsangi.in/veritas/23BCE0474.mp4
+
 Upload PDFs. Veritas pulls out the factual claims, then compares every claim
 against the claims in your **other** documents and labels how they relate:
 
