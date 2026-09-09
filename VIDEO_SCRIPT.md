@@ -1,4 +1,4 @@
-# Superjoin — 2-minute video script
+# Veritas — 2-minute video script
 
 Target: ~2:00 at a normal speaking pace (~300 words of narration).
 Each section has a rough timestamp, a visual cue, and the words to say.
@@ -9,7 +9,7 @@ Each section has a rough timestamp, a visual cue, and the words to say.
 
 **Visual:** Two report PDFs side by side (e.g. a company prospectus and its later annual report), scrolling.
 
-> When you compare two reports about the same thing, the claims rarely line up — and checking every number by hand takes hours. Superjoin does that cross-checking for you.
+> When you compare two reports about the same thing, the claims rarely line up — and checking every number by hand takes hours. Veritas does that cross-checking for you.
 
 ---
 
@@ -47,4 +47,4 @@ Each section has a rough timestamp, a visual cue, and the words to say.
 
 > One thing to know: matching is incremental. Each document is compared against the ones already uploaded, so upload the older document first, then the newer one. If you add them out of order, one command — `npm run reanalyze` — re-checks the whole set.
 >
-> That's Superjoin: upload your PDFs, get a checked list of where they agree and disagree — with the receipts.
+> That's Veritas: upload your PDFs, get a checked list of where they agree and disagree — with the receipts.

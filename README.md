@@ -1,6 +1,6 @@
-# Superjoin — Fact Extractor & Cross-Document Analyzer
+# Veritas — Fact Extractor & Cross-Document Analyzer
 
-Upload PDFs. Superjoin pulls out the factual claims, then compares every claim
+Upload PDFs. Veritas pulls out the factual claims, then compares every claim
 against the claims in your **other** documents and labels how they relate:
 
 | Label | Meaning |

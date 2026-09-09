@@ -1,7 +1,7 @@
 {
-  "name": "superjoin",
+  "name": "veritas",
   "version": "1.0.0",
-  "description": "",
+  "description": "Extract facts from PDFs and cross-check them across documents",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
